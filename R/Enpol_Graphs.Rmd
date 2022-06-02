@@ -1,0 +1,327 @@
+---
+title: "ENPOL_Graphs"
+author: "Eduardo Zago"
+date: "24/5/2022"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, include=FALSE, echo=FALSE}
+library(haven)
+library(tidyverse)
+library(sandwich)
+library(stargazer)
+library(fixest)
+library(knitr)
+library(RCT)
+library(kableExtra)
+library(ggpubr)
+```
+
+```{r functions}
+no_sabe_toNA <- function(x) ifelse(x == 8 | x == 9, NA, x)
+
+no_responde_toNA <- function(x) ifelse(x == 99 | x == 98, NA, x)
+
+tab <- function(frame_x, var_name){
+     var_name <- enquo(var_name)
+     frame_x |>
+          group_by(!!var_name) |>
+          summarise(n = n()) |>
+          mutate(totalN = (cumsum(n)),
+                 percent = round((n / sum(n)), 3),
+                 cumuPer = round(cumsum(freq = n / sum(n)), 3))
+}
+
+dummies <- function(x) ifelse(x == 2, 0, x)
+```
+
+
+```{r, include=FALSE}
+# Paths
+path_in <- "C:/Users/lalo-/Dropbox/Research/Prisons/Tesis/data/clean/"
+path_out <- "C:/Users/lalo-/Dropbox/Research/Prisons/Tesis/data/clean/csvs/"
+path_results <- "C:/Users/lalo-/Dropbox/Research/Prisons/Tesis/results/"
+```
+
+```{r}
+# Importing the output (run from here if you do not want to run all the code from above)
+controls_final <- read.csv(paste0(path_out, "controls.csv"))
+crime <- read.csv(paste0(path_out, "crimes.csv"))
+```
+
+# Preparation
+
+
+# Results:
+
+Now we can generate relevant descriptive statistics for each group: Private and Public. For example, we might be interested in the mean of both groups, as well as the p-value from a t-test, to see if they are similar or not:
+
+Personal Characteristics (gender, sexual orientation, race, age)
+```{r, results = "include"}
+controls_final %>% 
+  select(private, age, school, dialect, lit_read, lit_write,
+         afro:other_race, cis, trans, bi:other_sexor) %>%
+  balance_table(., "private") %>%
+  rename(variables = variables1,
+         m_public = Media_control1,
+         m_private = Media_trat1,
+         p_value = p_value1) %>%
+  kable(col.names = c("Variables",
+                      "Public", 
+                      "Private", "P-value"), format = "latex",
+        booktabs = T, 
+        caption = "Balance Table: Personal Characteristics")
+```
+Household characteristics (marital status, children):
+
+```{r, results = "include"}
+controls_final %>% 
+  select(private, married:widower, child:agechild3) %>%
+  balance_table(., "private") %>%
+  rename(variables = variables1,
+         m_public = Media_control1,
+         m_private = Media_trat1,
+         p_value = p_value1) %>%
+  kable(col.names = c("Variables",
+                      "Public", 
+                      "Private", "P-value"), format = "latex",
+        booktabs = T, 
+        caption = "Balance Table: Household Characteristics")
+```
+
+Health and Drug Consumption:
+
+```{r, results = "include"}
+controls_final %>% 
+  select(private, diabetes:Drugs) %>%
+  balance_table(., "private") %>%
+  rename(variables = variables1,
+         m_public = Media_control1,
+         m_private = Media_trat1,
+         p_value = p_value1) %>%
+  kable(col.names = c("Variables",
+                      "Public", 
+                      "Private", "P-value"), format = "latex",
+        booktabs = T,
+        caption = "Balance Table: Health and Drug Abuse")
+```
+
+Prior Work Characteristics and Sentences:
+
+```{r, results = "include"}
+controls_final %>% 
+  select(private, time_inc:housing_prior, re_offender) %>%
+  balance_table(., "private") %>%
+  rename(variables = variables1,
+         m_public = Media_control1,
+         m_private = Media_trat1,
+         p_value = p_value1) %>%
+  kable(col.names = c("Variables",
+                      "Public", 
+                      "Private", "P-value"), format = "latex",
+        booktabs = T,
+        caption = "Balance Table: Prior Characteristics")
+```
+
+Relevant 0nes
+
+```{r, results = asis}
+table <- controls_final %>% 
+  select(private, age, children, school, lit_read,
+         lit_write, single, married, sentence, income_prior) %>%
+  balance_table(., "private") %>%
+  rename(variables = variables1,
+         m_public = Media_control1,
+         m_private = Media_trat1,
+         p_value = p_value1)
+
+kbl(table, col.names = c("Variables",
+                      "Public", 
+                      "Private", "P-value"),
+        format = "latex",
+        caption = "Table 1. Balance Table",
+        booktabs = T)
+```
+
+Crimes:
+
+
+```{r}
+crime %>% 
+  select(private, rape.x:org_crime.x) %>%
+  balance_table(., "private") %>%
+  rename(variables = variables1,
+         m_public = Media_control1,
+         m_private = Media_trat1,
+         p_value = p_value1) %>%
+  mutate(across(where(is.numeric), ~ round(.x, digits = 4))) %>%
+  kable(col.names = c("Variables",
+                      "Public", 
+                      "Private", "P-value"), format = "latex",
+        booktabs = T,
+        caption = "Balance Table: Prior Characteristics")
+```
+
+```{r}
+crime %>% 
+  select(private, rape.y:org_crime.y) %>%
+  balance_table(., "private") %>%
+  rename(variables = variables1,
+         m_public = Media_control1,
+         m_private = Media_trat1,
+         p_value = p_value1)
+```
+
+
+
+# Graphs
+
+```{r}
+# Importing the output (run from here if you do not want to run all the code from above)
+dep_rates <- read.csv(paste0(path_out, "dependent_rates.csv"))
+```
+
+```{r}
+dep_rates_longer <- dep_rates |> pivot_longer(cols = starts_with("rate"), names_to = "rates", 
+                                               names_prefix = "rate")
+```
+
+```{r}
+rates_graph <- dep_rates_longer |> filter(is.na(value) == F) |> group_by(rates, private, value) |>
+  summarise(n = n()) |> mutate(totalN = (cumsum(n)), percent = (n / sum(n)), per_100 = 100*percent) |>
+  ungroup() |> mutate(satis = case_when(value == 1 ~ "Very dissatisfied",
+                                        value == 2 ~ "Somewhat dissatisfied",
+                                        value == 3 ~ "Somewhat satisfied",
+                                        value == 4 ~ "Very satisfied")) |> 
+  mutate(Type = ifelse(private == 1, "Private Center", "Public Center"))
+
+```
+
+```{r}
+p1 <- ggplot(data=rates_graph |> filter(rates == "_water1"), aes(x=value, y=per_100, fill=Type)) +
+geom_bar(stat="identity", position=position_dodge()) + 
+  scale_fill_manual(values=c("red4",
+                             "darkblue")) + theme_bw(base_size = 9) +
+  ggtitle("How satisfied are you with the drinking water?") +
+  labs(x = "", y = "Percentage")
+
+p2 <- ggplot(data=rates_graph |> filter(rates == "_drain1"), aes(x=value, y=per_100, fill=Type)) +
+geom_bar(stat="identity", position=position_dodge()) + 
+  scale_fill_manual(values=c("red4",
+                             "darkblue")) + theme_bw(base_size = 9) +
+  ggtitle("How satisfied are you with the drainage?") +
+  labs(x = "", y = "Percentage")
+
+p3 <- ggplot(data=rates_graph |> filter(rates == "_toilet1"), aes(x=value, y=per_100, fill=Type)) +
+geom_bar(stat="identity", position=position_dodge()) + 
+  scale_fill_manual(values=c("red4",
+                             "darkblue")) + theme_bw(base_size = 9) +
+  ggtitle("How satisfied are you with the toilets?") +
+  labs(x = "", y = "Percentage")
+
+p4 <- ggplot(data=rates_graph |> filter(rates == "_shower1"), aes(x=value, y=per_100, fill=Type)) +
+geom_bar(stat="identity", position=position_dodge()) + 
+  scale_fill_manual(values=c("red4",
+                             "darkblue")) + theme_bw(base_size = 9) +
+  ggtitle("How satisfied are you with the showers?") +
+  labs(x = "", y = "Percentage")
+
+p5 <- ggplot(data=rates_graph |> filter(rates == "_goods1"), aes(x=value, y=per_100, fill=Type)) +
+geom_bar(stat="identity", position=position_dodge()) +
+  scale_fill_manual(values=c("red4",
+                             "darkblue")) + theme_bw(base_size = 9) +
+  ggtitle("How satisfied are you with the goods?") +
+  labs(x = "", y = "Percentage")
+
+p6 <- ggplot(data=rates_graph |> filter(rates == "_visits1"), aes(x=value, y=per_100, fill=Type)) +
+geom_bar(stat="identity", position=position_dodge()) + 
+  scale_fill_manual(values=c("red4",
+                             "darkblue")) + theme_bw(base_size = 9) +
+  ggtitle("How satisfied are you with your visits treatment?") +
+  labs(x = "", y = "Percentage") 
+
+p7 <- ggplot(data=rates_graph |> filter(rates == "_educ1"), aes(x=value, y=per_100, fill=Type)) +
+geom_bar(stat="identity", position=position_dodge()) + 
+  scale_fill_manual(values=c("red4",
+                             "darkblue")) + theme_bw(base_size = 9) +
+  ggtitle("How satisfied are you with the educational programs?") +
+  labs(x = "", y = "Percentage")
+
+p8 <- ggplot(data=rates_graph |> filter(rates == "_light1"), aes(x=value, y=per_100, fill=Type)) +
+geom_bar(stat="identity", position=position_dodge()) + 
+  scale_fill_manual(values=c("red4",
+                             "darkblue")) + theme_bw(base_size = 9) +
+  ggtitle("How satisfied are you with the lights?") +
+  labs(x = "", y = "Percentage")
+
+```
+
+```{r}
+
+p11 <- ggplot(data=rates_graph |> filter(rates == "_water1"), aes(x=value, y=per_100, fill=Type)) +
+geom_bar(stat="identity", position=position_dodge()) + 
+  scale_fill_manual(values=c("red4",
+                             "darkblue")) +
+  ggtitle("How satisfied are you with the drinking water?") +
+  labs(x = "", y = "Percentage")
+
+p22 <- ggplot(data=rates_graph |> filter(rates == "_drain1"), aes(x=value, y=per_100, fill=Type)) +
+geom_bar(stat="identity", position=position_dodge()) + 
+  scale_fill_manual(values=c("red4",
+                             "darkblue"))  +
+  ggtitle("How satisfied are you with the drainage?") +
+  labs(x = "", y = "Percentage")
+```
+
+
+
+```{r}
+p1
+ggsave(paste0(path_results, "water_rates.jpeg"), width = 6.8, height = 6.2)
+p2
+ggsave(paste0(path_results, "drain_rates.jpeg"), width = 6.8, height = 6.2)
+```
+
+```{r}
+fig2 <- ggarrange(p11, p22, 
+          labels = c("A", "B"), common.legend = TRUE, legend = "bottom",
+          ncol = 1, nrow = 2)
+
+annotate_figure(fig2) |>
+  ggexport(filename = paste0(path_results,"rates_contract.jpeg"))
+fig2
+```
+
+
+
+```{r}
+fig <- ggarrange(p3, p4, p5, p8, 
+          labels = c("A", "B", "C", "D"), common.legend = TRUE, legend = "bottom",
+          ncol = 2, nrow = 2) |> ggexport(filename = paste0(path_results,"rates_contract_4.jpeg"))
+```
+
+
+```{r}
+tab(controls_final, private) |> select(private, n, totalN, percent) |> kbl(col.names = c("Type of Center",
+                      "N", 
+                      "Total", "Percentage"),
+        format = "latex",
+        caption = "Number of Observations per Group: Private and Public",
+        booktabs = T)
+  
+```
+
+
+
+
+
+
+
+
+
+
+

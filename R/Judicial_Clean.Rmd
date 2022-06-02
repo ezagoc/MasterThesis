@@ -1,0 +1,24 @@
+---
+title: "Judicial_Clean"
+author: "Eduardo Zago"
+date: "1/6/2022"
+output: html_document
+  html_document:
+    theme: united
+    highlight: tango
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = F)
+```
+
+# Paquetes:
+
+```{r, include = F}
+library(tidyverse)
+LIBRARY(HAVEN)
+library(kableExtra)
+
+```
+
